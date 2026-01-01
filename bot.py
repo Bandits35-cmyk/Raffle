@@ -1,12 +1,12 @@
 import telebot, json, os, random
-from flask import Flask, jsonify, request
-from threading import Thread
+from flask import Flask, request
 from datetime import datetime
 
 # ---------- ENV VARIABLES ----------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID  = int(os.getenv("ADMIN_ID"))
 ADMIN_KEY = os.getenv("ADMIN_KEY")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # ex: https://your-webservice.onrender.com/telegram_webhook
 # ----------------------------------
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -55,33 +55,36 @@ def participants_count(m):
 # ---------- API ENDPOINTS ----------
 @app.route("/participants")
 def participants():
-    """Returns list of usernames"""
     data = load()
-    return jsonify([u["username"] for u in data["users"]])
+    return {"users": [u["username"] for u in data["users"]]}
 
 @app.route("/spin", methods=["POST"])
 def spin():
-    """Admin-only spin"""
     if request.headers.get("X-ADMIN-KEY") != ADMIN_KEY:
         return "Unauthorized", 403
 
     data = load()
     if not data["users"]:
-        return jsonify({"error":"No users"})
+        return {"error":"No users"}
 
     winner = random.choice(data["users"])
-
     text = f"""🎉 SPIN RESULT 🎉
 🏆 Winner: @{winner['username']}
 """
     bot.send_message(ADMIN_ID, text)
+    return {"winner": winner["username"]}
 
-    return jsonify({"winner": winner["username"]})
+# ---------- TELEGRAM WEBHOOK ----------
+@app.route("/telegram_webhook", methods=["POST"])
+def telegram_webhook():
+    json_str = request.get_data().decode("utf-8")
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return "", 200
 
-# ---------- RUN BOT + API ----------
-def run_bot():
-    bot.infinity_polling(skip_pending=True)
-
-if __name__ == "__main__":
-    Thread(target=run_bot).start()
-    app.run(host="0.0.0.0", port=10000)
+# ---------- SET WEBHOOK ----------
+@app.before_first_request
+def set_webhook():
+    bot.remove_webhook()
+    bot.set_webhook(url=WEBHOOK_URL)    data = load()
+ 
